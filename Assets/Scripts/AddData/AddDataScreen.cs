@@ -2,6 +2,7 @@ using System;
 using AddTask;
 using Bitsplash.DatePicker;
 using Data;
+using DG.Tweening;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -43,6 +44,18 @@ namespace AddData
 
         [SerializeField] private Button _saveButton;
 
+        [Header("Animation Settings")] [SerializeField]
+        private float _fadeInDuration = 0.3f;
+
+        [SerializeField] private float _fadeOutDuration = 0.2f;
+        [SerializeField] private float _buttonScaleDuration = 0.1f;
+        [SerializeField] private float _buttonClickScale = 0.95f;
+        [SerializeField] private float _panelAnimationDuration = 0.25f;
+        [SerializeField] private Ease _fadeInEase = Ease.OutQuad;
+        [SerializeField] private Ease _fadeOutEase = Ease.InQuad;
+        [SerializeField] private Ease _buttonAnimationEase = Ease.OutBack;
+        [SerializeField] private Ease _panelAnimationEase = Ease.OutCubic;
+
         private ExpenseType _chosenType;
         private ScreenVisabilityHandler _screenVisabilityHandler;
         private DateTime _selectedDate = DateTime.Now;
@@ -52,6 +65,23 @@ namespace AddData
         private bool _isDatePanelOpen = false;
         private bool _isTimePanelOpen = false;
         private bool _isUpdatingCostText = false;
+        private bool _isAnimating = false;
+
+        private Sequence _screenFadeSequence;
+        private Sequence _datePanelSequence;
+        private Sequence _timePanelSequence;
+
+        private Vector3 _dateButtonOriginalScale;
+        private Vector3 _timeButtonOriginalScale;
+        private Vector3 _backButtonOriginalScale;
+        private Vector3 _saveButtonOriginalScale;
+        private Vector3 _expensesButtonOriginalScale;
+        private Vector3 _incomeButtonOriginalScale;
+        private Vector3 _saveDateButtonOriginalScale;
+        private Vector3 _saveTimeButtonOriginalScale;
+
+        private CanvasGroup _datePlaneCanvasGroup;
+        private CanvasGroup _timePlaneCanvasGroup;
 
         public event Action BackClicked;
         public event Action<Data.Data> DataSaved;
@@ -59,67 +89,208 @@ namespace AddData
         private void Awake()
         {
             _screenVisabilityHandler = GetComponent<ScreenVisabilityHandler>();
+
+            _dateButtonOriginalScale = _dateButton.transform.localScale;
+            _timeButtonOriginalScale = _timeButton.transform.localScale;
+            _backButtonOriginalScale = _backButton.transform.localScale;
+            _saveButtonOriginalScale = _saveButton.transform.localScale;
+            _expensesButtonOriginalScale = _expensesButton.transform.localScale;
+            _incomeButtonOriginalScale = _incomeButton.transform.localScale;
+            _saveDateButtonOriginalScale = _saveDateButton.transform.localScale;
+            _saveTimeButtonOriginalScale = _saveTimeButton.transform.localScale;
+
+            _datePlaneCanvasGroup = _datePlane.GetComponent<CanvasGroup>();
+            if (_datePlaneCanvasGroup == null)
+            {
+                _datePlaneCanvasGroup = _datePlane.AddComponent<CanvasGroup>();
+            }
+
+            _timePlaneCanvasGroup = _timePlane.GetComponent<CanvasGroup>();
+            if (_timePlaneCanvasGroup == null)
+            {
+                _timePlaneCanvasGroup = _timePlane.AddComponent<CanvasGroup>();
+            }
         }
 
         private void OnEnable()
         {
-            _backButton.onClick.AddListener(OnBackButtonClicked);
-            _expensesButton.onClick.AddListener(OnExpensesButtonClicked);
-            _incomeButton.onClick.AddListener(OnIncomeButtonClicked);
+            SetupButtonWithAnimation(_backButton, OnBackButtonClicked);
+            SetupButtonWithAnimation(_expensesButton, OnExpensesButtonClicked);
+            SetupButtonWithAnimation(_incomeButton, OnIncomeButtonClicked);
+            SetupButtonWithAnimation(_dateButton, OnDateButtonClicked);
+            SetupButtonWithAnimation(_saveDateButton, OnSaveDateButtonClicked);
+            SetupButtonWithAnimation(_timeButton, OnTimeButtonClicked);
+            SetupButtonWithAnimation(_saveTimeButton, OnSaveTimeButtonClicked);
+            SetupButtonWithAnimation(_saveButton, OnSaveButtonClicked);
 
             _nameInput.onValueChanged.AddListener(OnNameInputChanged);
             _costInput.onValueChanged.AddListener(OnCostInputChanged);
 
-            _dateButton.onClick.AddListener(OnDateButtonClicked);
-            _saveDateButton.onClick.AddListener(OnSaveDateButtonClicked);
-
-            _timeButton.onClick.AddListener(OnTimeButtonClicked);
-            _saveTimeButton.onClick.AddListener(OnSaveTimeButtonClicked);
-
             _timeSelector.HourInputed += OnHourSelected;
             _timeSelector.MinuteInputed += OnMinuteSelected;
             _timeSelector.AmPmInputed += OnAmPmSelected;
-
-            _saveButton.onClick.AddListener(OnSaveButtonClicked);
         }
 
         private void OnDisable()
         {
-            _backButton.onClick.RemoveListener(OnBackButtonClicked);
-            _expensesButton.onClick.RemoveListener(OnExpensesButtonClicked);
-            _incomeButton.onClick.RemoveListener(OnIncomeButtonClicked);
+            RemoveButtonAnimation(_backButton, OnBackButtonClicked);
+            RemoveButtonAnimation(_expensesButton, OnExpensesButtonClicked);
+            RemoveButtonAnimation(_incomeButton, OnIncomeButtonClicked);
+            RemoveButtonAnimation(_dateButton, OnDateButtonClicked);
+            RemoveButtonAnimation(_saveDateButton, OnSaveDateButtonClicked);
+            RemoveButtonAnimation(_timeButton, OnTimeButtonClicked);
+            RemoveButtonAnimation(_saveTimeButton, OnSaveTimeButtonClicked);
+            RemoveButtonAnimation(_saveButton, OnSaveButtonClicked);
 
             _nameInput.onValueChanged.RemoveListener(OnNameInputChanged);
             _costInput.onValueChanged.RemoveListener(OnCostInputChanged);
-
-            _dateButton.onClick.RemoveListener(OnDateButtonClicked);
-            _saveDateButton.onClick.RemoveListener(OnSaveDateButtonClicked);
-
-            _timeButton.onClick.RemoveListener(OnTimeButtonClicked);
-            _saveTimeButton.onClick.RemoveListener(OnSaveTimeButtonClicked);
 
             _timeSelector.HourInputed -= OnHourSelected;
             _timeSelector.MinuteInputed -= OnMinuteSelected;
             _timeSelector.AmPmInputed -= OnAmPmSelected;
 
-            _saveButton.onClick.RemoveListener(OnSaveButtonClicked);
+            KillAllAnimations();
+        }
+
+        private void KillAllAnimations()
+        {
+            _screenFadeSequence?.Kill();
+            _datePanelSequence?.Kill();
+            _timePanelSequence?.Kill();
+
+            _isDatePanelOpen = false;
+            _isTimePanelOpen = false;
+            _isAnimating = false;
+
+            _datePlane.SetActive(false);
+            _timePlane.SetActive(false);
+
+            if (_datePlaneCanvasGroup != null)
+            {
+                _datePlaneCanvasGroup.alpha = 0;
+                _datePlaneCanvasGroup.interactable = false;
+                _datePlaneCanvasGroup.blocksRaycasts = false;
+            }
+
+            if (_timePlaneCanvasGroup != null)
+            {
+                _timePlaneCanvasGroup.alpha = 0;
+                _timePlaneCanvasGroup.interactable = false;
+                _timePlaneCanvasGroup.blocksRaycasts = false;
+            }
         }
 
         private void Start()
         {
             InitializeUI();
             ResetInputs();
+            _screenVisabilityHandler.DisableScreen();
+        }
+
+        private void SetupButtonWithAnimation(Button button, UnityEngine.Events.UnityAction onClick)
+        {
+            UnityEngine.Events.UnityAction originalCallback = onClick;
+
+            button.onClick.RemoveListener(onClick);
+
+            button.onClick.AddListener(() =>
+            {
+                if (_isAnimating && !(button == _saveDateButton || button == _saveTimeButton))
+                {
+                    return;
+                }
+
+                button.transform.DOScale(_buttonClickScale * button.transform.localScale, _buttonScaleDuration)
+                    .SetEase(Ease.OutQuad)
+                    .OnComplete(() =>
+                    {
+                        button.transform.DOScale(button.transform.localScale / _buttonClickScale, _buttonScaleDuration)
+                            .SetEase(_buttonAnimationEase)
+                            .OnComplete(() => { originalCallback?.Invoke(); });
+                    });
+            });
+        }
+
+        private void RemoveButtonAnimation(Button button, UnityEngine.Events.UnityAction onClick)
+        {
+            button.onClick.RemoveAllListeners();
         }
 
         public void Enable()
         {
-            _screenVisabilityHandler.EnableScreen();
+            ResetInputs();
+            _screenFadeSequence?.Kill();
+            _isAnimating = true;
+
+            _screenFadeSequence = DOTween.Sequence();
+
+            CanvasGroup canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
+            {
+                canvasGroup = gameObject.AddComponent<CanvasGroup>();
+            }
+
+            canvasGroup.alpha = 1;
+
+            _screenFadeSequence.Append(canvasGroup.DOFade(1, _fadeInDuration).SetEase(_fadeInEase));
+            _screenFadeSequence.Join(_backButton.transform.DOScale(_backButtonOriginalScale, _fadeInDuration)
+                .From(Vector3.zero).SetEase(_fadeInEase));
+            _screenFadeSequence.Join(_saveButton.transform.DOScale(_saveButtonOriginalScale, _fadeInDuration)
+                .From(Vector3.zero).SetEase(_fadeInEase));
+
+            _screenFadeSequence.Join(_nameImage.transform.DOScale(1, _fadeInDuration).From(0.8f).SetEase(_fadeInEase));
+            _screenFadeSequence.Join(_costImage.transform.DOScale(1, _fadeInDuration).From(0.8f).SetEase(_fadeInEase)
+                .SetDelay(0.05f));
+
+            _screenFadeSequence.Join(_expensesButton.transform.DOScale(_expensesButtonOriginalScale, _fadeInDuration)
+                .From(Vector3.zero).SetEase(_fadeInEase).SetDelay(0.1f));
+            _screenFadeSequence.Join(_incomeButton.transform.DOScale(_incomeButtonOriginalScale, _fadeInDuration)
+                .From(Vector3.zero).SetEase(_fadeInEase).SetDelay(0.15f));
+            _screenFadeSequence.Join(_dateButton.transform.DOScale(_dateButtonOriginalScale, _fadeInDuration)
+                .From(Vector3.zero).SetEase(_fadeInEase).SetDelay(0.2f));
+            _screenFadeSequence.Join(_timeButton.transform.DOScale(_timeButtonOriginalScale, _fadeInDuration)
+                .From(Vector3.zero).SetEase(_fadeInEase).SetDelay(0.25f));
+
+            _screenFadeSequence.Join(_photosController.transform.DOScale(1, _fadeInDuration).From(0.8f)
+                .SetEase(_fadeInEase).SetDelay(0.3f));
+
+            _screenFadeSequence.OnComplete(() =>
+            {
+                _screenVisabilityHandler.EnableScreen();
+                _isAnimating = false;
+            });
         }
 
         public void Disable()
         {
-            ResetInputs();
-            _screenVisabilityHandler.DisableScreen();
+            _screenFadeSequence?.Kill();
+            _isAnimating = true;
+
+            _screenFadeSequence = DOTween.Sequence();
+
+            CanvasGroup canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
+            {
+                canvasGroup = gameObject.AddComponent<CanvasGroup>();
+            }
+
+            _screenFadeSequence.Append(canvasGroup.DOFade(0, _fadeOutDuration).SetEase(_fadeOutEase));
+            _screenFadeSequence.Join(_backButton.transform.DOScale(0, _fadeOutDuration).SetEase(_fadeOutEase));
+            _screenFadeSequence.Join(_saveButton.transform.DOScale(0, _fadeOutDuration).SetEase(_fadeOutEase));
+            _screenFadeSequence.Join(_nameImage.transform.DOScale(0.8f, _fadeOutDuration).SetEase(_fadeOutEase));
+            _screenFadeSequence.Join(_costImage.transform.DOScale(0.8f, _fadeOutDuration).SetEase(_fadeOutEase));
+            _screenFadeSequence.Join(_expensesButton.transform.DOScale(0, _fadeOutDuration).SetEase(_fadeOutEase));
+            _screenFadeSequence.Join(_incomeButton.transform.DOScale(0, _fadeOutDuration).SetEase(_fadeOutEase));
+            _screenFadeSequence.Join(_dateButton.transform.DOScale(0, _fadeOutDuration).SetEase(_fadeOutEase));
+            _screenFadeSequence.Join(_timeButton.transform.DOScale(0, _fadeOutDuration).SetEase(_fadeOutEase));
+            _screenFadeSequence.Join(_photosController.transform.DOScale(0.8f, _fadeOutDuration).SetEase(_fadeOutEase));
+
+            _screenFadeSequence.OnComplete(() =>
+            {
+                ResetInputs();
+                _screenVisabilityHandler.DisableScreen();
+                _isAnimating = false;
+            });
         }
 
         private void InitializeUI()
@@ -133,6 +304,18 @@ namespace AddData
             _datePlane.SetActive(false);
             _timePlane.SetActive(false);
 
+            if (_datePlaneCanvasGroup != null)
+            {
+                _datePlaneCanvasGroup.interactable = false;
+                _datePlaneCanvasGroup.blocksRaycasts = false;
+            }
+
+            if (_timePlaneCanvasGroup != null)
+            {
+                _timePlaneCanvasGroup.interactable = false;
+                _timePlaneCanvasGroup.blocksRaycasts = false;
+            }
+
             UpdateSaveButtonState();
         }
 
@@ -144,13 +327,17 @@ namespace AddData
         private void OnExpensesButtonClicked()
         {
             _chosenType = ExpenseType.Expense;
-            UpdateExpenseTypeButtonsUI();
+
+            _expensesButton.image.DOColor(_selectedExpensesButtonColor, 0.2f).SetEase(Ease.OutQuad);
+            _incomeButton.image.DOColor(_defaultExpensesButtonColor, 0.2f).SetEase(Ease.OutQuad);
         }
 
         private void OnIncomeButtonClicked()
         {
             _chosenType = ExpenseType.Income;
-            UpdateExpenseTypeButtonsUI();
+
+            _expensesButton.image.DOColor(_defaultExpensesButtonColor, 0.2f).SetEase(Ease.OutQuad);
+            _incomeButton.image.DOColor(_selectedExpensesButtonColor, 0.2f).SetEase(Ease.OutQuad);
         }
 
         private void UpdateExpenseTypeButtonsUI()
@@ -169,7 +356,11 @@ namespace AddData
 
         private void OnNameInputChanged(string value)
         {
-            UpdateInputFieldColor(_nameInput, !string.IsNullOrEmpty(value));
+            _nameImage.DOColor(
+                !string.IsNullOrEmpty(value) ? _filledInputColor : _defaultInputColor,
+                0.3f
+            ).SetEase(Ease.OutQuad);
+
             UpdateSaveButtonState();
         }
 
@@ -191,7 +382,11 @@ namespace AddData
                 _costInput.text = "";
             }
 
-            UpdateInputFieldColor(_costInput, !string.IsNullOrEmpty(cleanValue));
+            _costImage.DOColor(
+                !string.IsNullOrEmpty(cleanValue) ? _filledInputColor : _defaultInputColor,
+                0.3f
+            ).SetEase(Ease.OutQuad);
+
             UpdateSaveButtonState();
 
             _isUpdatingCostText = false;
@@ -203,7 +398,7 @@ namespace AddData
             {
                 _costImage.color = isFilled ? _filledInputColor : _defaultInputColor;
             }
-            else if(inputField == _nameInput)
+            else if (inputField == _nameInput)
             {
                 _nameImage.color = isFilled ? _filledInputColor : _defaultInputColor;
             }
@@ -211,25 +406,68 @@ namespace AddData
 
         private void OnDateButtonClicked()
         {
-            _isDatePanelOpen = !_isDatePanelOpen;
-            _datePlane.SetActive(_isDatePanelOpen);
+            if (_isAnimating)
+                return;
 
-            if (_isDatePanelOpen && _isTimePanelOpen)
+            _isAnimating = true;
+            _isDatePanelOpen = !_isDatePanelOpen;
+
+            _datePanelSequence?.Kill();
+
+            _datePanelSequence = DOTween.Sequence();
+
+            if (_isDatePanelOpen)
             {
-                _isTimePanelOpen = false;
-                _timePlane.SetActive(false);
+                _datePlane.SetActive(true);
+
+                _datePlaneCanvasGroup.alpha = 0;
+                _datePlaneCanvasGroup.interactable = true;
+                _datePlaneCanvasGroup.blocksRaycasts = true;
+
+                _datePanelSequence.Append(_datePlaneCanvasGroup.DOFade(1, _panelAnimationDuration)
+                    .SetEase(_panelAnimationEase));
+                _datePanelSequence.Join(_datePlane.transform.DOScale(1, _panelAnimationDuration).From(0.9f)
+                    .SetEase(_panelAnimationEase));
+
+                if (_isTimePanelOpen)
+                {
+                    _isTimePanelOpen = false;
+                    CloseTimePanelWithAnimation();
+                }
+
+                _datePanelSequence.OnComplete(() => { _isAnimating = false; });
             }
+            else
+            {
+                CloseDatePanelWithAnimation();
+            }
+        }
+
+        private void CloseDatePanelWithAnimation()
+        {
+            _datePlane.transform.DOScale(Vector3.zero, _buttonScaleDuration * 0.7f).SetEase(Ease.InBack)
+                .OnComplete(() => _datePlane.SetActive(false));
         }
 
         private void OnSaveDateButtonClicked()
         {
             var selection = _datePickerSettings.Content.Selection;
-
             _selectedDate = selection.GetItem(0);
 
-            _isDatePanelOpen = false;
-            _datePlane.SetActive(false);
-            UpdateDateText();
+            _saveDateButton.transform.DOPunchScale(new Vector3(0.2f, 0.2f, 0.2f), 0.3f, 10, 1)
+                .OnComplete(() =>
+                {
+                    _isDatePanelOpen = false;
+                    CloseDatePanelWithAnimation();
+
+                    _dateText.transform.DOScale(1.1f, 0.2f)
+                        .SetEase(Ease.OutQuad)
+                        .OnComplete(() =>
+                        {
+                            UpdateDateText();
+                            _dateText.transform.DOScale(1f, 0.2f).SetEase(Ease.OutBack);
+                        });
+                });
         }
 
         private void UpdateDateText()
@@ -239,31 +477,68 @@ namespace AddData
 
         private void OnTimeButtonClicked()
         {
+            if (_isAnimating)
+                return;
+
+            _isAnimating = true;
             _isTimePanelOpen = !_isTimePanelOpen;
-            _timePlane.SetActive(_isTimePanelOpen);
+
+            _timePanelSequence?.Kill();
+
+            _timePanelSequence = DOTween.Sequence();
 
             if (_isTimePanelOpen)
             {
+                _timePlane.SetActive(true);
+
+                _timePlaneCanvasGroup.alpha = 0;
+                _timePlaneCanvasGroup.interactable = true;
+                _timePlaneCanvasGroup.blocksRaycasts = true;
+
+                _timePanelSequence.Append(_timePlaneCanvasGroup.DOFade(1, _panelAnimationDuration)
+                    .SetEase(_panelAnimationEase));
+                _timePanelSequence.Join(_timePlane.transform.DOScale(1, _panelAnimationDuration).From(0.9f)
+                    .SetEase(_panelAnimationEase));
+
                 _timeSelector.Enable();
 
                 if (_isDatePanelOpen)
                 {
                     _isDatePanelOpen = false;
-                    _datePlane.SetActive(false);
+                    CloseDatePanelWithAnimation();
                 }
+
+                _timePanelSequence.OnComplete(() => { _isAnimating = false; });
             }
             else
             {
+                CloseTimePanelWithAnimation();
                 _timeSelector.Disable();
             }
         }
 
+        private void CloseTimePanelWithAnimation()
+        {
+            _timePlane.transform.DOScale(Vector3.zero, _buttonScaleDuration * 0.7f).SetEase(Ease.InBack)
+                .OnComplete(() => _timePlane.SetActive(false));
+        }
+
         private void OnSaveTimeButtonClicked()
         {
-            _isTimePanelOpen = false;
-            _timePlane.SetActive(false);
-            _timeSelector.Disable();
-            UpdateTimeText();
+            _saveTimeButton.transform.DOPunchScale(new Vector3(0.2f, 0.2f, 0.2f), 0.3f, 10, 1)
+                .OnComplete(() =>
+                {
+                    CloseTimePanelWithAnimation();
+                    _timeSelector.Disable();
+
+                    _timeText.transform.DOScale(1.1f, 0.2f)
+                        .SetEase(Ease.OutQuad)
+                        .OnComplete(() =>
+                        {
+                            UpdateTimeText();
+                            _timeText.transform.DOScale(1f, 0.2f).SetEase(Ease.OutBack);
+                        });
+                });
         }
 
         private void OnHourSelected(string hour)
@@ -290,7 +565,8 @@ namespace AddData
         {
             if (CanSaveData())
             {
-                SaveData();
+                _saveButton.transform.DOPunchScale(new Vector3(0.2f, 0.2f, 0.2f), 0.3f, 10, 1)
+                    .OnComplete(() => { SaveData(); });
             }
         }
 
@@ -302,14 +578,31 @@ namespace AddData
 
         private void UpdateSaveButtonState()
         {
-            _saveButton.interactable = CanSaveData();
+            bool canSave = CanSaveData();
+
+            if (_saveButton.interactable != canSave)
+            {
+                _saveButton.interactable = canSave;
+
+                if (canSave)
+                {
+                    _saveButton.transform.DOScale(_saveButtonOriginalScale, 0.3f)
+                        .SetEase(Ease.OutBack);
+                }
+                else
+                {
+                    _saveButton.transform.DOScale(_saveButtonOriginalScale * 0.95f, 0.3f)
+                        .SetEase(Ease.OutQuad);
+                }
+            }
         }
 
         private void SaveData()
         {
-            if (!int.TryParse(_costInput.text, out int cost))
+            string costText = _costInput.text.Replace("$", "").Trim();
+
+            if (!int.TryParse(costText, out int cost))
             {
-                Debug.LogError("Не удалось преобразовать стоимость в число");
                 return;
             }
 
@@ -360,10 +653,7 @@ namespace AddData
 
             _photosController.ResetPhotos();
 
-            _datePlane.SetActive(false);
-            _timePlane.SetActive(false);
-            _isDatePanelOpen = false;
-            _isTimePanelOpen = false;
+            KillAllAnimations();
         }
     }
 }

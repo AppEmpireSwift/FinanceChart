@@ -1,10 +1,16 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using Newtonsoft.Json;
+using UnityEngine;
+
 namespace SaveSystem
 {
-    /*public class DataSaver
+    public class DataSaver
     {
-        private readonly string _savePath = Path.Combine(Application.persistentDataPath, "Entries");
+        private readonly string _savePath = Path.Combine(Application.persistentDataPath, "Datas");
 
-        public void SaveData(List<AssetData> datas)
+        public void SaveData(List<Data.Data> datas)
         {
             try
             {
@@ -20,7 +26,7 @@ namespace SaveSystem
             }
         }
 
-        public List<AssetData> LoadData()
+        public List<Data.Data> LoadData()
         {
             try
             {
@@ -33,12 +39,12 @@ namespace SaveSystem
 
                 DataWrapper wrapper = JsonConvert.DeserializeObject<DataWrapper>(jsonData);
 
-                return wrapper?.Datas ?? new List<AssetData>();
+                return wrapper?.Datas ?? new List<Data.Data>();
             }
             catch (Exception e)
             {
                 Debug.LogError($"Error loading item data: {e.Message}");
-                return new List<AssetData>();
+                return new List<Data.Data>();
             }
         }
     }
@@ -46,11 +52,11 @@ namespace SaveSystem
     [Serializable]
     public class DataWrapper
     {
-        public List<AssetData> Datas;
+        public List<Data.Data> Datas;
 
-        public DataWrapper(List<AssetData> datas)
+        public DataWrapper(List<Data.Data> datas)
         {
             Datas = datas;
         }
-    }*/
+    }
 }

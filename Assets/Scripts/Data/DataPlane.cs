@@ -12,8 +12,8 @@ namespace Data
         [SerializeField] private Button _openButton;
         [SerializeField] private Button _deleteButton;
 
-        public event Action<DataPlane> OpenClicked;
-        public event Action DeleteClicked;
+        public event Action<Data> OpenClicked;
+        public event Action<Data> DeleteClicked;
 
         public bool IsActive { get; private set; }
         public Data Data { get; private set; }
@@ -47,10 +47,9 @@ namespace Data
         {
             IsActive = false;
             gameObject.SetActive(IsActive);
-            OnReset();
         }
 
-        private void OnReset()
+        public void OnReset()
         {
             _nameText.text = string.Empty;
             _costText.text = string.Empty;
@@ -59,13 +58,13 @@ namespace Data
 
         private void OnOpenClicked()
         {
-            OpenClicked?.Invoke(this);
+            OpenClicked?.Invoke(Data);
         }
 
         private void OnDeleteClicked()
         {
             Disable();
-            DeleteClicked?.Invoke();
+            DeleteClicked?.Invoke(Data);
         }
     }
 }

@@ -90,8 +90,6 @@ public class PhotosController : MonoBehaviour
 
     public void UpdatePhotos()
     {
-        Debug.Log("update");
-        
         _imagePlacer.gameObject.SetActive(false);
         if (_noItemObj != null)
         {
@@ -113,8 +111,6 @@ public class PhotosController : MonoBehaviour
 
     public void ResetPhotos()
     {
-        Debug.Log("reset");
-        
         _imagePlacer.gameObject.SetActive(false);
         _photosPath = null;
         if (_noItemObj != null)
